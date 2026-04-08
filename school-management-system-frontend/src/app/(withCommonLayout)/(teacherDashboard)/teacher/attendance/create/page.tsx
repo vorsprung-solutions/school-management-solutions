@@ -8,6 +8,7 @@ import {
   useCreateAttendanceMutation,
   useGetStudentsForAttendanceQuery,
 } from "@/redux/features/attendance/attendanceApi";
+import { useGetAllStudentsQuery, useGetStudentsByFiltersQuery } from "@/redux/features/student/studentApi";
 import { IStudent } from "@/types/student";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -49,12 +50,32 @@ const CreateAttendancePage = () => {
   const router = useRouter();
   const [selectedStudent, setSelectedStudent] = useState<IStudent | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<string>("");
+  const [studentFilters, setStudentFilters] = useState({
+    class: "",
+    session: "",
+    group: "",
+  });
 
-  const { data: studentsResponse, isLoading: studentsLoading } =
-    useGetStudentsForAttendanceQuery();
+  const { data: allStudentsResponse, isLoading: studentsLoading } = useGetAllStudentsQuery(undefined);
+  const { data: filteredStudentsData, isLoading: loadingFiltered } = useGetStudentsByFiltersQuery(
+    {
+      class: studentFilters.class ? Number(studentFilters.class) : undefined,
+      session: studentFilters.session
+        ? Number(studentFilters.session)
+        : undefined,
+      group: studentFilters.group || undefined,
+    },
+    { skip: false }
+  );
+
   const [createAttendance, { isLoading }] = useCreateAttendanceMutation();
 
-  const students = React.useMemo(() => studentsResponse?.data || [], [studentsResponse]);
+  const allStudents = React.useMemo(() => allStudentsResponse?.data?.students || [], [allStudentsResponse]);
+  const filteredStudents = React.useMemo(() => filteredStudentsData?.data || [], [filteredStudentsData]);
+
+  const hasActiveFilters =
+    studentFilters.class || studentFilters.session || studentFilters.group;
+  const students = hasActiveFilters ? filteredStudents : allStudents;
 
   const {
     register,
@@ -75,7 +96,7 @@ const CreateAttendancePage = () => {
   // Update selected student when form value changes
   React.useEffect(() => {
     if (watchedStudent) {
-      const student = students.find((s) => s._id === watchedStudent);
+      const student = students.find((s: IStudent) => s._id === watchedStudent);
       setSelectedStudent(student || null);
     }
   }, [watchedStudent, students]);
@@ -169,22 +190,56 @@ const CreateAttendancePage = () => {
                 {/* Student Selection */}
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Student *</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    <Input
+                      placeholder="Class"
+                      type="number"
+                      value={studentFilters.class}
+                      onChange={(e) =>
+                        setStudentFilters((prev) => ({
+                          ...prev,
+                          class: e.target.value,
+                        }))
+                      }
+                    />
+                    <Input
+                      placeholder="Session"
+                      type="number"
+                      value={studentFilters.session}
+                      onChange={(e) =>
+                        setStudentFilters((prev) => ({
+                          ...prev,
+                          session: e.target.value,
+                        }))
+                      }
+                    />
+                    <Input
+                      placeholder="Group (Optional)"
+                      value={studentFilters.group}
+                      onChange={(e) =>
+                        setStudentFilters((prev) => ({
+                          ...prev,
+                          group: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
                   <Select onValueChange={(value) => setValue("student", value)}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select a student" />
                     </SelectTrigger>
                     <SelectContent>
                       {students
-                        .filter((student) => student._id)
-                        .map((student) => (
-                          <SelectItem key={student._id} value={student._id}>
+                        .filter((student: IStudent) => student._id)
+                        .map((student: IStudent) => (
+                          <SelectItem key={student._id!} value={student._id!}>
                             <div className="flex flex-col">
                               <span className="font-medium">
                                 {student.name}
                               </span>
                               <span className="text-sm text-gray-500">
                                 Roll: {student.roll_no} | Class: {student.class}{" "}
-                                | {student.department?.name}
+                                {student.department?.name ? `| ${student.department.name}` : ''}
                               </span>
                             </div>
                           </SelectItem>
